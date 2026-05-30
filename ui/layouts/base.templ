@@ -1,0 +1,193 @@
+package layouts
+
+import (
+	"github.com/templui/templui-quickstart/internal/pagination"
+	"github.com/templui/templui-quickstart/ui/components/button"
+	"github.com/templui/templui-quickstart/ui/components/chart"
+	"github.com/templui/templui-quickstart/ui/components/collapsible"
+	"github.com/templui/templui-quickstart/ui/components/dialog"
+	"github.com/templui/templui-quickstart/ui/components/icon"
+	"github.com/templui/templui-quickstart/ui/components/input"
+	"github.com/templui/templui-quickstart/ui/components/label"
+	"github.com/templui/templui-quickstart/ui/components/popover"
+	"github.com/templui/templui-quickstart/ui/components/selectbox"
+	"github.com/templui/templui-quickstart/ui/components/sidebar"
+	"github.com/templui/templui-quickstart/ui/components/toast"
+	"github.com/templui/templui-quickstart/ui/modules"
+	"os"
+)
+
+type VouchersResponse struct {
+	Vouchers         []Voucher                  `json:"vouchers"`
+	FilterValues     FilterValues               `json:"FilterValues"`
+	CurrentValidity  int32                      `json:"CurrentValidity"`
+	CurrentState     string                     `json:"CurrentState"`
+	CurrentGroupName string                     `json:"CurrentGroupName"`
+	CurrentPrinted   string                     `json:"CurrentPrinted"`
+	CurrentLimit     int                        `json:"CurrentLimit"`
+	Pagination       pagination.PaginationState `json:"PaginationState"`
+	SelectedPrinter  string                     `json:"SelectedPrinter"`
+}
+
+type Voucher struct {
+	ID           int          `json:"ID"`
+	Username     string       `json:"Username"`
+	Validity     int          `json:"Validity"`
+	State        string       `json:"State"`
+	GroupName    string       `json:"GroupName"`
+	Printed      string       `json:"Printed"`
+	ProviderName ProviderName `json:"ProviderName"`
+}
+
+type ProviderName struct {
+	String string `json:"String"`
+	Valid  bool   `json:"Valid"`
+}
+
+type FilterValues struct {
+	StatesUnique    []string `json:"StatesUnique"`
+	ValidityUnique  []int64  `json:"ValidityUnique"`
+	GroupNameUnique []string `json:"GroupNameUnique"`
+	PrintedUnique   []string `json:"PrintedUnique"`
+	Printers        []string `json:"Printers"`
+}
+
+templ BaseLayout(vouchersAPI VouchersResponse) {
+	{{
+		
+		// Get organisation name from env
+		organisation := os.Getenv("ORGANISATION_NAME")
+	}}
+	<!DOCTYPE html>
+	<html lang="en" class="h-full dark">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<!-- Tailwind CSS (output) -->
+			<link href="/assets/css/output.css" rel="stylesheet"/>
+			<script src="/assets/js/htmx.min.js"></script>
+			<script defer src="/assets/js/cdn.min.js"></script>
+			// <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz" crossorigin="anonymous"></script>
+			@collapsible.Script()
+			@sidebar.Script()
+			@dialog.Script()
+			@popover.Script()
+			@selectbox.Script()
+			@input.Script()
+			@label.Script()
+			@chart.Script()
+			@toast.Script()
+			<script defer src="/assets/js/toast_trigger.js"></script>
+		</head>
+		<body class="h-full">
+			<div class="h-full flex flex-col">
+				@sidebar.Layout() {
+					@sidebar.Sidebar(sidebar.Props{
+						Collapsible: sidebar.CollapsibleIcon,
+						Variant:     sidebar.VariantFloating,
+					}) {
+						@sidebar.Header() {
+							@sidebar.Menu() {
+								@sidebar.MenuItem() {
+									@sidebar.MenuButton(sidebar.MenuButtonProps{
+										Href: "#",
+									}) {
+										@icon.Gem(icon.Props{Class: "size-4"})
+										<span class="font-semibold">{ organisation }</span>
+									}
+								}
+							}
+						}
+						@sidebar.Content() {
+							@sidebar.Group() {
+								@sidebar.GroupLabel() {
+									Platform
+								}
+								@sidebar.Menu() {
+									@sidebar.MenuItem() {
+										@sidebar.MenuButton(sidebar.MenuButtonProps{
+											Href:    "/",
+											Tooltip: "Dashboard",
+										}) {
+											@icon.LayoutDashboard(icon.Props{Class: "size-4"})
+											<span>Dashboard</span>
+										}
+									}
+									@sidebar.MenuItem() {
+										@sidebar.MenuButton(sidebar.MenuButtonProps{
+											Href:    "vouchers",
+											Tooltip: "Vouchers",
+										}) {
+											@icon.FileSearch(icon.Props{Class: "size-4"})
+											<span>Vouchers</span>
+										}
+									}
+								}
+							}
+							@sidebar.Separator()
+						}
+					}
+					@sidebar.Inset() {
+						<div class="flex flex-col relative">
+							<div class="flex h-14 justify-between z-10 items-center gap-4 px-6 sticky top-0 right-0 left-0">
+								@sidebar.Trigger()
+								<div class="flex gap-1 items-center justify-center">
+									// start
+									<div>
+										@selectbox.SelectBox() {
+											@selectbox.Trigger(selectbox.TriggerProps{
+												Name:  "printer",
+												ID:    "printer-select",
+												Class: "w-40 ml-4",
+												Attributes: templ.Attributes{
+													"hx-get":     "/api/update",
+													"hx-trigger": "change",
+													"hx-target":  "#voucherTable",
+													"hx-include": "[name='limit'], [name='state'], [name='search'], [name character='validity'], [name='group_name'], [name='printed']",
+												},
+											}) {
+												@selectbox.Value(selectbox.ValueProps{
+													Placeholder: vouchersAPI.SelectedPrinter,
+												})
+											}
+											@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+												@selectbox.Group() {
+													for _, printer := range vouchersAPI.FilterValues.Printers {
+														@selectbox.Item(selectbox.ItemProps{
+															Value:    printer,
+															Selected: vouchersAPI.SelectedPrinter == printer,
+														}) {
+															{ printer }
+														}
+													}
+												}
+											}
+										}
+									</div>
+									// end
+									@button.Button(button.Props{
+										Size:    button.SizeIcon,
+										Variant: button.VariantGhost,
+										Attributes: templ.Attributes{
+											"hx-post":         "/api/sync",
+											"hx-swap":         "none",
+											"hx-disabled-elt": "this",
+										},
+										Class: "[&.htmx-request]:bg-secondary",
+									}) {
+										@icon.RefreshCw(icon.Props{Size: 20})
+									}
+									@modules.ThemeSwitcher()
+								</div>
+								// <span class="text-sm text-muted-foreground">Press Ctrl+B to toggle sidebar</span>
+							</div>
+							<div class="flex-1 p-6">
+								{ children... }
+							</div>
+						</div>
+					}
+				}
+			</div>
+		</body>
+	</html>
+}

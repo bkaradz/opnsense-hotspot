@@ -1,0 +1,579 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/templui/templui-quickstart/ui/components/button"
+	"github.com/templui/templui-quickstart/ui/components/checkbox"
+	"github.com/templui/templui-quickstart/ui/components/dialog"
+	"github.com/templui/templui-quickstart/ui/components/icon"
+	"github.com/templui/templui-quickstart/ui/components/input"
+	"github.com/templui/templui-quickstart/ui/components/label"
+	"github.com/templui/templui-quickstart/ui/components/selectbox"
+	"github.com/templui/templui-quickstart/ui/components/table"
+	"github.com/templui/templui-quickstart/ui/layouts"
+)
+
+templ Vouchers(vouchersAPI layouts.VouchersResponse) {
+	@layouts.BaseLayout(vouchersAPI) {
+		<div
+			x-data="{
+        selectedIds: [],
+        clearSelection() {
+          // Loop only through the selected rows
+          this.selectedIds.forEach(id => {
+              const rowCheckbox = document.querySelector(`.row-selector[value='${id}']`);
+              if (rowCheckbox) {
+                  rowCheckbox.checked = false;
+              }
+          });
+
+          // Finally reset Alpine's array
+          this.selectedIds = [];
+
+          // Optional: reset master checkbox
+          const master = document.querySelector('#master-checkbox');
+          if (master) master.checked = false;
+        },
+        // Function to calculate the count of selected IDs
+        countSelected() {
+          return this.selectedIds.length;
+        },
+        // Master checkbox logic
+        selectAll(event) {
+          const checkboxes = document.querySelectorAll('.row-selector');
+
+          // Clear selectedIds array first
+          this.selectedIds = []; 
+
+          if (event.target.checked) {
+            // 1. Iterate and SET THE CHECKED PROPERTY on the row checkboxes
+            checkboxes.forEach(cb => {
+              cb.checked = true; // Crucial: Manually set checked state
+            });
+            
+            // 2. Wait for Alpine to process the x-model updates, then re-populate selectedIds
+            // This is often not strictly necessary if setting `checked` updates x-model immediately,
+            // but it's safer to ensure all values are read back.
+            // A more reliable Alpine-native approach is to set the array directly with the values.
+            
+            // A cleaner approach for selection:
+            checkboxes.forEach(cb => {
+              // Only push the value if it's checked (which it should be now)
+              if (cb.checked) {
+                this.selectedIds.push(cb.value);
+              }
+            });
+            
+          } else {
+            // If unchecking, clear selectedIds AND manually uncheck all rows
+            checkboxes.forEach(cb => {
+              cb.checked = false; // Manually set checked state
+            });
+          }
+        },
+        async sendToPrint() {
+          try {
+              const printer = document.querySelector('[name=\'printer\']')?.value || '';
+              const response = await fetch('/api/print', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ ids: this.selectedIds, printer: printer })
+              });
+
+              const values = {};
+              const fieldNames = ['limit', 'state', 'search', 'validity', 'group_name', 'printed', 'printer'];
+              
+              fieldNames.forEach(name => {
+                  const element = document.querySelector(`[name='${name}']`);
+                  if (element) {
+                      // Read the value (works for inputs, selects, etc.)
+                      values[name] = element.value;
+                  }
+              });
+
+              htmx.ajax('GET', '/api/update', {
+                  target: '#voucherTable',
+                  values: values,
+              });
+
+              this.selectedIds = [];
+
+              if (!response.ok) {
+                  throw new Error(`HTTP error! status: ${response.status}`);
+              }
+
+              const result = await response.text();
+              console.log('Server response:', result);
+              
+              document.body.dispatchEvent(new CustomEvent('show-toast', {
+                  detail: {
+                      title: 'Printing Started',
+                      description: 'Selected vouchers have been sent to the printer.',
+                      variant: 'success'
+                  }
+              }));
+          } catch (e) {
+              console.error('Printing failed:', e);
+              document.body.dispatchEvent(new CustomEvent('show-toast', {
+                  detail: {
+                      title: 'Printing Failed',
+                      description: 'An error occurred while sending vouchers to the printer.',
+                      variant: 'destructive'
+                  }
+              }));
+          } finally {
+              if (window.tui && window.tui.dialog && window.tui.dialog.close) {
+                  window.tui.dialog.close('printing-dialog');
+              } else {
+                  console.warn('window.tui.dialog.close not found');
+              }
+          }
+        },
+        getIncludeValues() {
+          // Collect values from the specified form elements
+          const values = {};
+          const fieldNames = ['limit', 'state', 'search', 'validity', 'group_name', 'printed', 'printer'];
+          
+          fieldNames.forEach(name => {
+              const element = document.querySelector(`[name='${name}']`);
+              if (element) {
+                  // Read the value (works for inputs, selects, etc.)
+                  values[name] = element.value;
+              }
+          });
+          return values;
+        },
+      }"
+		>
+			<div id="voucherTableControls" class="flex items-center pb-4 justify-between">
+				<div class="relative">
+					<span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10 pointer-events-none">
+						@icon.Search(icon.Props{Size: 16})
+					</span>
+					@input.Input(input.Props{
+						Name:        "search",
+						Type:        input.TypeSearch,
+						Class:       "pl-8",
+						Placeholder: "Search username...",
+						Attributes: templ.Attributes{
+							"hx-get":     "/api/update",
+							"hx-trigger": "keyup changed delay:300ms",
+							"hx-target":  "#voucherTable",
+							"hx-include": "[name='limit'], [name='state'], [name='validity'], [name='group_name'], [name='printed'], [name='printer']",
+						},
+					})
+				</div>
+				<div>
+					@dialog.Trigger(dialog.TriggerProps{
+						For: "printing-dialog",
+					}) {
+						@button.Button(button.Props{
+							Variant: button.VariantOutline,
+						}) {
+							Print
+						}
+					}
+				</div>
+				<div class="flex items-center">
+					<div>
+						@selectbox.SelectBox() {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name:  "state",
+								ID:    "state",
+								Class: "w-30",
+								Attributes: templ.Attributes{
+									"hx-get":     "/api/update",
+									"hx-trigger": "change",
+									"hx-target":  "#voucherTable",
+									"hx-include": "[name='limit'], [name='search'], [name='validity'], [name='group_name'], [name='printed'], [name='printer']",
+								},
+							}) {
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: vouchersAPI.CurrentState,
+								})
+							}
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								@selectbox.Group() {
+									for _, state := range vouchersAPI.FilterValues.StatesUnique {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    fmt.Sprintf("%s", state),
+											Selected: vouchersAPI.CurrentState == state,
+										}) {
+											{ state }
+										}
+									}
+								}
+							}
+						}
+					</div>
+					<div>
+						@selectbox.SelectBox() {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name:  "validity",
+								ID:    "validity",
+								Class: "w-30 ml-4",
+								Attributes: templ.Attributes{
+									"hx-get":     "/api/update",
+									"hx-trigger": "change",
+									"hx-target":  "#voucherTable",
+									"hx-include": "[name='limit'], [name='state'], [name='search'], [name='group_name'], [name='printed'], [name='printer']",
+								},
+							}) {
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: fmt.Sprintf("%d", vouchersAPI.CurrentValidity),
+								})
+							}
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								@selectbox.Group() {
+									for _, valid := range vouchersAPI.FilterValues.ValidityUnique {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    fmt.Sprintf("%d", valid),
+											Selected: vouchersAPI.CurrentValidity == int32(valid),
+										}) {
+											{ valid }
+										}
+									}
+								}
+							}
+						}
+					</div>
+					@VoucherGroupName(vouchersAPI)
+					<div>
+						@selectbox.SelectBox() {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								Name:  "printed",
+								ID:    "printed",
+								Class: "w-35 ml-4",
+								Attributes: templ.Attributes{
+									"hx-get":     "/api/update",
+									"hx-trigger": "change",
+									"hx-target":  "#voucherTable",
+									"hx-include": "[name='limit'], [name='state'], [name='search'], [name='validity'], [name='group_name'], [name='printer']",
+								},
+							}) {
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: vouchersAPI.CurrentPrinted,
+								})
+							}
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								@selectbox.Group() {
+									for _, printed := range vouchersAPI.FilterValues.PrintedUnique {
+										@selectbox.Item(selectbox.ItemProps{
+											Value:    fmt.Sprintf("%s", printed),
+											Selected: vouchersAPI.CurrentPrinted == printed,
+										}) {
+											{ printed }
+										}
+									}
+								}
+							}
+						}
+					</div>
+					<div class="flex items-center ml-4">
+						@label.Label(label.Props{
+							For:   "limit",
+							Class: "text-muted-foreground text-sm mr-2",
+						}) {
+							Limit
+						}
+						@selectbox.SelectBox() {
+							@selectbox.Trigger(selectbox.TriggerProps{
+								ID:    "limit",
+								Name:  "limit",
+								Class: "w-18",
+								Attributes: templ.Attributes{
+									"hx-get":      "/api/update",
+									"hx-trigger":  "change",
+									"x-on:change": "clearSelection()",
+									"hx-target":   "#voucherTable",
+									"hx-include":  "[name='state'], [name='search'], [name='validity'], [name='group_name'], [name='printed'], [name='printer']",
+								},
+							}) {
+								@selectbox.Value(selectbox.ValueProps{
+									Placeholder: fmt.Sprintf("%d", vouchersAPI.CurrentLimit),
+								})
+							}
+							@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+								@selectbox.Group() {
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    "5",
+										Selected: vouchersAPI.CurrentLimit == 5,
+									}) {
+										5
+									}
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    "10",
+										Selected: vouchersAPI.CurrentLimit == 10,
+									}) {
+										10
+									}
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    "20",
+										Selected: vouchersAPI.CurrentLimit == 20,
+									}) {
+										20
+									}
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    "30",
+										Selected: vouchersAPI.CurrentLimit == 30,
+									}) {
+										30
+									}
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    "40",
+										Selected: vouchersAPI.CurrentLimit == 40,
+									}) {
+										40
+									}
+									@selectbox.Item(selectbox.ItemProps{
+										Value:    "50",
+										Selected: vouchersAPI.CurrentLimit == 50,
+									}) {
+										50
+									}
+								}
+							}
+						}
+					</div>
+				</div>
+			</div>
+			<div id="voucherTable">
+				@VoucherTable(vouchersAPI)
+			</div>
+			// Printing Dialog
+			<div class="space-y-4">
+				@dialog.Content(dialog.ContentProps{
+					ID:    "printing-dialog",
+					Open:  false,
+					Class: "max-w-md",
+				}) {
+					@dialog.Header() {
+						@dialog.Title() {
+							Printing
+						}
+						@dialog.Description() {
+							Print selected rows.
+						}
+					}
+					<p class="text-sm">
+						Print <span x-text="countSelected()">0</span> selected Vouchers.
+					</p>
+					@dialog.Footer() {
+						@dialog.Close(dialog.CloseProps{
+							For: "printing-dialog",
+						}) {
+							@button.Button(button.Props{
+								Variant: button.VariantOutline,
+							}) {
+								Cancel
+							}
+						}
+						@button.Button(button.Props{
+							ID: "print",
+							Attributes: templ.Attributes{
+								"x-on:click": "sendToPrint()",
+								":disabled":  "selectedIds.length === 0",
+								// "hx-target":  "#voucherTable",
+							},
+						}) {
+							Print
+						}
+					}
+				}
+			</div>
+		</div>
+	}
+}
+
+templ VoucherGroupName(vouchersAPI layouts.VouchersResponse) {
+	<div id="voucherGroupName" hx-swap-oob="true">
+		@selectbox.SelectBox() {
+			@selectbox.Trigger(selectbox.TriggerProps{
+				Name:  "group_name",
+				ID:    "group_name",
+				Class: "w-35 ml-4",
+				Attributes: templ.Attributes{
+					"hx-get":     "/api/update",
+					"hx-trigger": "change",
+					"hx-target":  "#voucherTable",
+					"hx-include": "[name='limit'], [name='state'], [name='search'], [name='validity'], [name='printed'], [name='printer']",
+				},
+			}) {
+				@selectbox.Value(selectbox.ValueProps{
+					Placeholder: vouchersAPI.CurrentGroupName,
+				})
+			}
+			@selectbox.Content(selectbox.ContentProps{NoSearch: true}) {
+				@selectbox.Group() {
+					for _, group := range vouchersAPI.FilterValues.GroupNameUnique {
+						@selectbox.Item(selectbox.ItemProps{
+							Value:    fmt.Sprintf("%s", group),
+							Selected: vouchersAPI.CurrentGroupName == group,
+						}) {
+							{ group }
+						}
+					}
+				}
+			}
+		}
+	</div>
+}
+
+templ VoucherTable(vouchersAPI layouts.VouchersResponse) {
+	@table.Table() {
+		@table.Header() {
+			@table.Row() {
+				@table.Head() {
+					@checkbox.Checkbox(checkbox.Props{
+						ID:    "master-checkbox",
+						Name:  "master-checkbox",
+						Class: "master-checkbox",
+						Attributes: templ.Attributes{
+							"x-on:change":    "selectAll($event)",
+							":checked":       "selectedIds.length > 0 && selectedIds.length === document.querySelectorAll('.row-selector').length",
+							":indeterminate": "selectedIds.length > 0 && selectedIds.length < document.querySelectorAll('.row-selector').length",
+						},
+					})
+				}
+				@table.Head() {
+					ID 
+				}
+				@table.Head() {
+					Username 
+				}
+				@table.Head() {
+					Validity 
+				}
+				@table.Head() {
+					State 
+				}
+				@table.Head() {
+					Group Name
+				}
+				@table.Head() {
+					Printed
+				}
+			}
+		}
+		@table.Body() {
+			for _, voucher := range vouchersAPI.Vouchers {
+				@table.Row(table.RowProps{
+					Attributes: templ.Attributes{
+						"id":     fmt.Sprintf("row-%d", voucher.ID),
+						":class": fmt.Sprintf("{'selected-row': selectedIds.includes('%d')}", voucher.ID),
+					},
+				}) {
+					@table.Cell() {
+						@checkbox.Checkbox(checkbox.Props{
+							ID:    fmt.Sprintf("%d", voucher.ID),
+							Class: "row-selector",
+							Name:  "rows", // name must be SAME for all checkboxes
+							Value: fmt.Sprintf("%d", voucher.ID),
+							Attributes: templ.Attributes{
+								"x-model": "selectedIds",
+							},
+						})
+					}
+					@table.Cell() {
+						{ voucher.ID }
+					}
+					@table.Cell() {
+						{ voucher.Username }
+					}
+					@table.Cell() {
+						{ voucher.Validity }
+					}
+					@table.Cell() {
+						{ voucher.State }
+					}
+					@table.Cell() {
+						{ voucher.GroupName }
+					}
+					@table.Cell() {
+						{ voucher.Printed }
+					}
+				}
+			}
+		}
+	}
+	<div class="flex items-center justify-end space-x-2 pt-4">
+		<div id="selection-status" class="text-muted-foreground flex-1 text-sm">
+			<span x-text="countSelected()">0</span> of { vouchersAPI.Pagination.TotalRecords } row(s) selected.
+		</div>
+		<div class="flex items-center space-x-2">
+			@label.Label(label.Props{
+				Class: "text-muted-foreground flex-1 text-sm",
+			}) {
+				Page { vouchersAPI.Pagination.CurrentPage } of { vouchersAPI.Pagination.TotalPages }
+			}
+			// First
+			@button.Button(button.Props{
+				ID:       "first",
+				Size:     button.SizeIcon,
+				Disabled: vouchersAPI.Pagination.IsFirstDisabled,
+				Variant:  button.VariantGhost,
+				Attributes: templ.Attributes{
+					"hx-get":     "/api/update",
+					"hx-vals":    fmt.Sprintf("{\"page\": %d}", 1),
+					"hx-trigger": "click",
+					"x-on:click": "clearSelection()",
+					"hx-target":  "#voucherTable",
+					"hx-include": "[name='limit'], [name='state'], [name='search'], [name='validity'], [name='group_name'], [name='printed'], [name='printer']",
+				},
+			}) {
+				@icon.ChevronFirst(icon.Props{Size: 16})
+			}
+			// Previous
+			@button.Button(button.Props{
+				ID:       "previous",
+				Size:     button.SizeIcon,
+				Disabled: vouchersAPI.Pagination.IsPrevDisabled,
+				Variant:  button.VariantGhost,
+				Attributes: templ.Attributes{
+					"hx-get":     "/api/update",
+					"hx-vals":    fmt.Sprintf("{\"page\": %d}", vouchersAPI.Pagination.CurrentPage-1),
+					"hx-trigger": "click",
+					"x-on:click": "clearSelection()",
+					"hx-target":  "#voucherTable",
+					"hx-include": "[name='limit'], [name='state'], [name='search'], [name='validity'], [name='group_name'], [name='printed'], [name='printer']",
+				},
+			}) {
+				@icon.ChevronLeft(icon.Props{Size: 16})
+			}
+			// Next
+			@button.Button(button.Props{
+				ID:       "next",
+				Size:     button.SizeIcon,
+				Disabled: vouchersAPI.Pagination.IsNextDisabled,
+				Variant:  button.VariantGhost,
+				Attributes: templ.Attributes{
+					"hx-get":     "/api/update",
+					"hx-vals":    fmt.Sprintf("{\"page\": %d}", vouchersAPI.Pagination.CurrentPage+1),
+					"hx-trigger": "click",
+					"x-on:click": "clearSelection()",
+					"hx-target":  "#voucherTable",
+					"hx-include": "[name='limit'], [name='state'], [name='search'], [name='validity'], [name='group_name'], [name='printed'], [name='printer']",
+				},
+			}) {
+				@icon.ChevronRight(icon.Props{Size: 16})
+			}
+			// Last
+			@button.Button(button.Props{
+				ID:       "last",
+				Size:     button.SizeIcon,
+				Disabled: vouchersAPI.Pagination.IsLastDisabled,
+				Variant:  button.VariantGhost,
+				Attributes: templ.Attributes{
+					"hx-get":     "/api/update",
+					"hx-vals":    fmt.Sprintf("{\"page\": %d}", vouchersAPI.Pagination.TotalPages),
+					"hx-trigger": "click",
+					"x-on:click": "clearSelection()",
+					"hx-target":  "#voucherTable",
+					"hx-include": "[name='limit'], [name='state'], [name='search'], [name='validity'], [name='group_name'], [name='printed'], [name='printer']",
+				},
+			}) {
+				@icon.ChevronLast(icon.Props{Size: 16})
+			}
+		</div>
+	</div>
+}

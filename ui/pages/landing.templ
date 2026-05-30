@@ -1,0 +1,64 @@
+package pages
+
+import "github.com/templui/templui-quickstart/ui/layouts"
+import "github.com/templui/templui-quickstart/ui/components/card"
+import "github.com/templui/templui-quickstart/ui/components/chart"
+
+// import "github.com/templui/templui-quickstart/utils"
+templ Landing(dailyChart, weeklyChart, monthlyChart chart.Data) {
+	@layouts.BaseLayout(layouts.VouchersResponse{}) {
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+			<div class="">
+				@card.Card(card.Props{Class: "w-full"}) {
+					@card.Header() {
+						@card.Title() {
+							Daily Sales
+						}
+					}
+					@card.Content() {
+						@chart.Chart(chart.Props{
+							Variant:     chart.VariantBar,
+							ShowYGrid:   true,
+							ShowXLabels: true,
+							Data:        dailyChart,
+						})
+					}
+				}
+			</div>
+			<div class="">
+				@card.Card(card.Props{Class: "w-full"}) {
+					@card.Header() {
+						@card.Title() {
+							Weekly Sales
+						}
+					}
+					@card.Content() {
+						@chart.Chart(chart.Props{
+							Variant:     chart.VariantBar,
+							ShowYGrid:   true,
+							ShowXLabels: true,
+							Data:        weeklyChart,
+						})
+					}
+				}
+			</div>
+			<div class="">
+				@card.Card(card.Props{Class: "w-full"}) {
+					@card.Header() {
+						@card.Title() {
+							Monthly Sales
+						}
+					}
+					@card.Content() {
+						@chart.Chart(chart.Props{
+							Variant:     chart.VariantBar,
+							ShowYGrid:   true,
+							ShowXLabels: true,
+							Data:        monthlyChart,
+						})
+					}
+				}
+			</div>
+		</div>
+	}
+}
