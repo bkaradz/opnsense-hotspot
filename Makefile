@@ -43,11 +43,11 @@ build:
 	cp tmp/bin/main bin/main
 	
 
-# Build for all platforms
-build-all: build-windows build-mac build-linux
+# # Build for all platforms
+# build-all: build-windows build-mac build-linux
 
-build-windows:
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/main.exe ./main.go
+# build-windows:
+# 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/main.exe ./main.go
 
 # build-mac:
 # 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o bin/main-mac ./main.go
