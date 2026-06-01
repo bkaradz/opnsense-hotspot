@@ -22,7 +22,7 @@ A lot of projects uses an A4 printer
 
 ### Prerequisites
 
-* <a href="https://go.dev/" target="_blank">Go programing language</a>
+* <a href="https://go.dev/" target="_blank">Go programming language</a>
 * <a href="https://nodejs.org/en" target="_blank">Nodejs</a>
  
 Check out the quick start on how to install these on your operating system 

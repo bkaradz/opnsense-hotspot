@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -21,7 +22,10 @@ func FetchVouchersJSON[T any](url string, target *T) error {
 	req.SetBasicAuth(apiKey, apiSecret)
 
 	// Send the request
-	client := &http.Client{}
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
 	resp, err := client.Do(req)
 	if err != nil {
 		panic(err)
